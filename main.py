@@ -11,13 +11,40 @@ from app.bots.single_market_maker_bot import SingleMarketMakerBot
 from app.exchanges.backpack import BackpackExchange
 from app.exchanges.base_exchange import BaseExchange
 from app.exchanges.paradex import ParadexExchange
+from app.helpers.config import (
+    is_paper_trading_enabled,
+    get_paper_trading_initial_balance,
+    get_paper_trading_fill_delay_ms
+)
 from app.log_setup import log_setup, get_market
+from app.paper_trading import PaperTradingExchange
 
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 load_dotenv()
 log_setup()
+
+
+def wrap_exchange_for_paper_trading(exchange: BaseExchange) -> BaseExchange:
+    """
+    Wrap an exchange with paper trading if enabled.
+
+    Args:
+        exchange: The real exchange to wrap
+
+    Returns:
+        PaperTradingExchange if enabled, otherwise the original exchange
+    """
+    if is_paper_trading_enabled():
+        return PaperTradingExchange(
+            real_exchange=exchange,
+            initial_balance=get_paper_trading_initial_balance(),
+            max_leverage=int(os.getenv("MAX_LEVERAGE", "5")),
+            fill_delay_ms=get_paper_trading_fill_delay_ms(),
+            enable_trade_logging=True
+        )
+    return exchange
 
 
 async def main():
@@ -34,6 +61,10 @@ async def main():
             exchange: BaseExchange = ParadexExchange(os.getenv("L1_ADDRESS"), os.getenv("L2_PRIVATE_KEY"))
         else:
             exchange: BaseExchange = BackpackExchange(os.getenv("API_KEY"), os.getenv("API_SECRET"))
+
+        # Wrap with paper trading if enabled
+        exchange = wrap_exchange_for_paper_trading(exchange)
+
         await exchange.setup()
 
         check_balance(exchange, Decimal(os.getenv("MAX_POSITION_SIZE")))
@@ -55,6 +86,10 @@ async def main():
             exchange2: BaseExchange = ParadexExchange(os.getenv("L1_ADDRESS_2"), os.getenv("L2_PRIVATE_KEY_2"))
         else:
             exchange2: BaseExchange = BackpackExchange(os.getenv("API_KEY_2"), os.getenv("API_SECRET_2"))
+
+        # Wrap with paper trading if enabled
+        exchange1 = wrap_exchange_for_paper_trading(exchange1)
+        exchange2 = wrap_exchange_for_paper_trading(exchange2)
 
         await exchange1.setup()
         await exchange2.setup()

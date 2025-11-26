@@ -179,6 +179,76 @@ accounts.
 TRADING_MODE - 2 | The bot will try to open a position using a LIMIT order for both accounts, but if one account has an
 open position, the other one will open a position using a MARKET order for hedging. For closing working in same way
 
+### Paper Trading Mode
+
+Paper trading allows you to **test strategies with live market data without risking real capital**. All orders are simulated based on real-time order book conditions, and trades are logged to CSV for analysis.
+
+#### Enabling Paper Trading
+
+Add these variables to your `.env` file (or use example configs in `environments/`):
+
+```dotenv
+PAPER_TRADING=True                # Enable paper trading mode
+PAPER_INITIAL_BALANCE=1000        # Starting virtual balance (in USDC)
+PAPER_FILL_DELAY_MS=100           # Simulated order processing delay (in milliseconds)
+```
+
+#### Quick Start
+
+Single Strategy:
+```cmd
+env $(cat environments/.env.paper.single.example | sed '/^\s*#/d; /^\s*$/d; s/#.*//; s/\r//g' | xargs) python main.py
+```
+
+Parallel Strategy:
+```cmd
+env $(cat environments/.env.paper.parallel.example | sed '/^\s*#/d; /^\s*$/d; s/#.*//; s/\r//g' | xargs) python main.py
+```
+
+#### How It Works
+
+- **Live Market Data**: Connects to Paradex/Backpack for real-time order book and prices
+- **Simulated Fills**: Orders are filled when market conditions match, with realistic slippage
+- **Virtual Portfolio**: Tracks balance, positions, and PnL without touching real funds
+- **Trade Logging**: Exports all trades to `logs/paper_trading/paper_trades_YYYYMMDD_HHMMSS.csv`
+- **Realistic Fees**: Applies maker rebates (-0.02%) and taker fees (0.05%)
+
+#### Trade History Analysis
+
+After running, analyze your results:
+
+```python
+import pandas as pd
+
+df = pd.read_csv('logs/paper_trading/paper_trades_20250115_103000.csv')
+print(f"Total PnL: ${df['realized_pnl'].sum():.2f}")
+print(f"Win Rate: {(df['realized_pnl'] > 0).mean() * 100:.1f}%")
+print(f"Total Fees: ${df['fee'].sum():.4f}")
+```
+
+#### Performance Metrics
+
+On shutdown, you'll see a summary:
+
+```
+🧪 ========== PAPER TRADING SUMMARY ==========
+🧪 Initial Balance: 1000.00 USDC
+🧪 Current Balance: 1045.23 USDC
+🧪 Total PnL: 45.23 USDC (4.52%)
+🧪 Total Trades: 127
+🧪 Win Rate: 58.3%
+🧪 Total Fees: -2.15 USDC
+🧪 Max Drawdown: 8.45%
+🧪 ==========================================
+```
+
+#### Important Notes
+
+- Paper trading is **optimistic** - real trading will have more slippage and execution delays
+- Always test new strategies in paper mode for 24+ hours before going live
+- Use realistic balance (e.g., 1000 USDC) to properly test capital efficiency
+- See `app/paper_trading/README.md` for detailed documentation
+
 ### Recommendation
 
 #### STRATEGY_TYPE=1 | Single
